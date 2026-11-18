@@ -310,6 +310,9 @@ const CAT={
   t_switch:{n:'نقطة مفتاح',ic:'🎚️',g:'tasis',tp:1,L:'elec',code:'م',mount:'wall',w:8,d:5,h:12,e:120,col:'#f59e0b'},
   t_light:{n:'نقطة إضاءة سقف',ic:'💡',g:'tasis',tp:1,L:'elec',code:'ن',mount:'ceil',w:12,d:12,h:5,col:'#eab308'},
   t_wlight:{n:'نقطة أباليك',ic:'🕯️',g:'tasis',tp:1,L:'elec',code:'أ',mount:'wall',w:8,d:5,h:8,e:190,col:'#d97706'},
+  esp1:{n:'نود ESP خط واحد',ic:'📟',g:'tasis',tp:1,L:'elec',sq:1,code:'E1',ch:1,mount:'wall',w:9,d:5,h:9,e:120,col:'#0d9488'},
+  esp2:{n:'نود ESP خطين',ic:'📟',g:'tasis',tp:1,L:'elec',sq:1,code:'E2',ch:2,mount:'wall',w:9,d:5,h:9,e:120,col:'#0f766e'},
+  esp3:{n:'نود ESP 3 خطوط',ic:'📟',g:'tasis',tp:1,L:'elec',sq:1,code:'E3',ch:3,mount:'wall',w:9,d:5,h:9,e:120,col:'#115e59'},
   t_ac:{n:'نقطة تكييف',ic:'❄️',g:'tasis',tp:1,L:'elec',code:'ت',mount:'wall',w:10,d:5,h:10,e:230,col:'#7c3aed'},
   t_heater:{n:'نقطة سخان',ic:'♨️',g:'tasis',tp:1,L:'elec',code:'س',mount:'wall',w:10,d:5,h:10,e:180,col:'#9333ea'},
   t_data:{n:'نقطة نت / دش',ic:'📶',g:'tasis',tp:1,L:'elec',code:'N',mount:'wall',w:8,d:5,h:8,e:40,col:'#0891b2'},
@@ -687,6 +690,7 @@ function panel(){const P=$('#panel');if(!sel||tab!=='2d'){P.classList.remove('on
   if(['door','balcony','door2'].includes(it.k))h+='<button class="btn" id="pFl">🔄 اقلب الفتحة</button>';
   if(c.g!=='open'&&c.mount!=='wall')h+='</div><div class="row"><button class="btn" data-mv="0,-5">⬆️</button><button class="btn" data-mv="0,5">⬇️</button><button class="btn" data-mv="5,0">➡️</button><button class="btn" data-mv="-5,0">⬅️</button><span style="align-self:center;color:#64748b;font-size:12px">5 سم</span></div><div class="row">';
   h+='<button class="btn" id="pDup">⧉ نسخة</button><button class="btn dan" id="pDel">🗑️ مسح</button></div>';
+  if(c.ch)h+=`<div class="sec">📟 نود ESP — ${c.ch===1?'خط واحد (ريلاي واحد)':c.ch===2?'خطين (2 ريلاي)':'3 خطوط (3 ريلاي)'} · تقدر تطلّع منه خطوط التمديد</div>`;
   if(c.tp)h+=`<div class="sec">${LAYERS[c.L].ic} نقطة تأسيس — الارتفاع من الأرض هو مكان تركيبها</div><label class="fld">ملاحظات / مواصفات<input id="pNote" style="direction:rtl;text-align:right" placeholder="مثلاً: 16 أمبير، تحت الرخامة…" value="${esc(it.note||'')}"></label>`;
   P.innerHTML=h;
   {const pn=$('#pNote');if(pn)pn.onchange=e=>{snap();it.note=e.target.value;changed();};}
@@ -781,6 +785,7 @@ const BLD={
   heater(o){const{g,w,h,d}=o;Cy(g,w/2,w/2,h,M('#f8fafc',{r:0.35}));led(o,0,h*0.5,d/2+0.003);},
   socket(o){const{g,w,h,d}=o;Bx(g,w,h,d,M('#f8fafc',{r:0.3}));for(const s of[-1,1])Sp(g,0.006,M('#334155'),s*0.012,h*0.45,d/2);led(o,0,h*0.85,d/2+0.002);},
   switch(o){const{g,w,h,d}=o;Bx(g,w,h,d,M('#f8fafc',{r:0.3}));const k=Bx(g,w*0.6,h*0.5,0.008,M('#e2e8f0'),0,h*0.25,d/2+0.004);o.upd.push(on=>k.rotation.x=on?0.2:-0.2);led(o,0,h*0.88,d/2+0.002);},
+  esp1(o){espNode(o,1);},esp2(o){espNode(o,2);},esp3(o){espNode(o,3);},
   t_db(o){const{g,w,d,h}=o;Bx(g,w,h,d,M('#d4d4d8',{m:0.3,r:0.4}));Bx(g,w-0.04,h-0.04,0.004,M('#e5e7eb',{r:0.3}),0,0.02,d/2);Bx(g,0.02,0.06,0.01,M('#18181b'),w/2-0.05,h/2,d/2+0.004);},
   column(o){const{g,w,d,h}=o;Bx(g,w,h,d,M(S.wallColor,{r:0.9}));},
   column_rect(o){BLD.column(o);},
@@ -840,6 +845,7 @@ function buildItem(it){const c=CAT[it.k],g=new T.THREE.Group();const o={g,w:it.w
   g.position.set(it.x/100,c.mount==='ceil'?S.wallH/100:(it.e||0)/100,it.y/100);g.rotation.y=-it.r*R;
   g.traverse(m=>{m.userData.id=it.id;if(m.isMesh){m.castShadow=!(c.g==='open'||it.k==='rug'||c.mount==='ceil'&&it.k==='light');m.receiveShadow=true;}});
   T.root.add(g);T.objs.set(it.id,o);o.upd.forEach(f=>f(T.night));}
+function espNode(o,n){const{g,w,h,d}=o;Bx(g,w,h,0.012,M('#f8fafc',{r:0.35}),0,0,-d/2+0.006);const kw=(w-0.012)/n;for(let i=0;i<n;i++){Bx(g,kw-0.006,h-0.02,0.008,M('#e2e8f0',{r:0.3}),-w/2+0.006+kw*(i+0.5),0.01,-d/2+0.016);const m=DM('#134e4a','#2dd4bf');Sp(g,0.003,m,-w/2+0.006+kw*(i+0.5),h-0.016,-d/2+0.021);m.emissiveIntensity=1.5;}}
 function tasis3d(o){const{g,w,d,h,it}=o,c=CAT[it.k];const m=M(c.col,{r:0.4});if(c.L==='elec'){if(c.mount==='ceil'){Cy(g,w/2,w/2,0.03,M('#f1f5f9'),0,-0.03);Cy(g,w/2*0.55,w/2*0.55,0.005,m,0,-0.035);}else{Bx(g,Math.max(w,0.07),Math.max(h,0.07),0.02,M('#f8fafc',{r:0.5}),0,0,-d/2+0.01);Bx(g,Math.max(w,0.07)*0.6,Math.max(h,0.07)*0.6,0.006,m,0,Math.max(h,0.07)*0.2,-d/2+0.022);}}else{if(c.mount==='wall'){Sp(g,0.028,m,0,h/2,-d/2+0.03);Cy(g,0.012,0.012,0.06,M('#94a3b8',{m:0.7,r:0.3}),0,h/2,-d/2+0.03).rotation.x=Math.PI/2;}else{Cy(g,w/2,w/2,0.012,m,0,0.001);Cy(g,w/2*0.6,w/2*0.6,0.004,M('#18181b'),0,0.013);}}}
 function buildWall(w){const L=wlen(w)/100,t=w.t/100,Hh=S.wallH/100;const g=new T.THREE.Group();g.position.set(w.a.x/100,0,w.a.y/100);g.rotation.y=-Math.atan2(w.b.y-w.a.y,w.b.x-w.a.x);
   const m=M(S.wallColor,{r:0.9});const ops=S.items.filter(i=>i.wall===w.id).map(i=>{const lo=(i.e||0)/100;return{a:(i.s-i.w/2)/100,b:(i.s+i.w/2)/100,lo,hi:Math.min(Hh,lo+i.h/100)};}).sort((p,q)=>p.a-q.a);
