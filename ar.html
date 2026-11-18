@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="color-scheme" content="light">
+<title>قياس الشقة بـ ARCore</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap" rel="stylesheet">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;font-family:Cairo,system-ui,sans-serif;background:#0f172a;color:#fff}
+button{font-family:inherit;cursor:pointer;color:#0f172a;-webkit-text-fill-color:currentColor}
+#home{min-height:100%;display:flex;flex-direction:column;gap:14px;padding:22px 18px;max-width:560px;margin:auto}
+h1{margin:0;font-size:22px}h1 span{color:#f59e0b}
+.card{background:#1e293b;border-radius:16px;padding:14px 16px;line-height:1.8;font-size:14px}
+.card b{color:#fbbf24}
+.big{border:0;border-radius:16px;padding:16px;font:800 18px Cairo;background:#f59e0b}
+.big:disabled{opacity:.45}
+#msg{color:#fca5a5;font-weight:700;font-size:14px;min-height:20px}
+/* overlay أثناء AR */
+#ov{position:fixed;inset:0;display:none;pointer-events:none}
+#ov.on{display:block}
+#top{pointer-events:auto;position:absolute;top:0;left:0;right:0;padding:10px 12px;background:linear-gradient(#000c,#0000);display:flex;gap:8px;align-items:center}
+#info{position:absolute;top:58px;left:10px;right:10px;text-align:center;font:800 15px Cairo;text-shadow:0 1px 4px #000;line-height:1.7}
+#live{position:absolute;left:0;right:0;top:calc(50% + 36px);text-align:center;font:800 22px Cairo;text-shadow:0 2px 6px #000}
+.dot{position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 2px #0008}
+#bar{pointer-events:auto;position:absolute;left:0;right:0;bottom:0;padding:10px 12px 18px;background:linear-gradient(#0000,#000d 30%);display:flex;flex-direction:column;gap:8px}
+.modes{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.modes button{border:1px solid #fff6;background:#fff2;color:#fff;border-radius:999px;padding:7px 12px;font:700 13px Cairo}
+.modes button.on{background:#f59e0b;color:#111;border-color:#f59e0b}
+.row{display:flex;gap:8px}.row button{flex:1}
+.b{border:0;border-radius:12px;padding:11px;font:800 14px Cairo;background:#fff}
+.b.add{background:#f59e0b;padding:15px;font-size:17px}
+.b.ok{background:#16a34a;color:#fff}
+.b:disabled{opacity:.4}
+.x{border:0;border-radius:10px;background:#fff3;color:#fff;padding:7px 12px;font:700 13px Cairo}
+#done{display:none;flex-direction:column;gap:12px;padding:18px;max-width:560px;margin:auto}
+#done.on{display:flex}
+#plan{width:100%;aspect-ratio:1;background:#f8f7f3;border-radius:16px}
+textarea{width:100%;height:110px;border-radius:12px;border:0;padding:8px;font:11px monospace;direction:ltr}
+label.ck{display:flex;gap:8px;align-items:center;font-size:14px}
+</style>
+</head>
+<body>
+<div id="home">
+  <h1>📐 قياس الشقة بـ <span>ARCore</span></h1>
+  <div class="card">
+    القياس هنا بيستخدم <b>(ARCore)</b> — الكاميرا والحساسات مع بعض بيعرفوا مكان الموبايل بالظبط، فالمقاسات حقيقية من غير معايرة.<br>
+    1️⃣ دوس «ابدأ» وحرّك الموبايل ببطء ناحية الأرض لحد ما تظهر الدايرة.<br>
+    2️⃣ <b>الأركان:</b> حط الدايرة على الأرض عند كل ركنة (تحت التقاء الحيطتين) ودوس «سجّل» — تقدر تتمشى في الأوضة عادي.<br>
+    3️⃣ <b>باب/شباك:</b> سجّل طرفينه على الأرض.<br>
+    4️⃣ <b>ارتفاع:</b> وجّه الدايرة على السقف أو أعلى الحيطة.<br>
+    5️⃣ دوس «خلّصت» وانسخ الأوضة، وفي برنامج «مصمم الشقة» اختار «📥 الصق قياس الكاميرا».
+  </div>
+  <div id="msg"></div>
+  <button class="big" id="startBtn">▶️ ابدأ القياس</button>
+  <a href="./" style="color:#93c5fd;text-align:center;font-weight:700">↩ افتح برنامج مصمم الشقة</a>
+</div>
+
+<div id="ov">
+  <div id="top"><button class="x" id="endBtn">✕ خلّصت</button><span id="stat" style="font:700 12px Cairo"></span></div>
+  <div class="dot" id="dot"></div>
+  <div id="info"></div>
+  <div id="live"></div>
+  <div id="bar">
+    <div class="modes">
+      <button data-m="corner" class="on">🧱 أركان</button><button data-m="door">🚪 باب</button><button data-m="window">🪟 شباك</button><button data-m="height">📏 ارتفاع</button>
+    </div>
+    <button class="b add" id="addBtn">➕ سجّل</button>
+    <div class="row"><button class="b" id="undoBtn">↩ رجوع</button><button class="b ok" id="finBtn">✔ خلّصت الأوضة</button></div>
+  </div>
+</div>
+
+<div id="done">
+  <h1>✔ <span>الأوضة اتقاست</span></h1>
+  <canvas id="plan"></canvas>
+  <div class="card" id="sum"></div>
+  <label class="ck"><input type="checkbox" id="ortho" checked> عدّل الزوايا تبقى قايمة (90°)</label>
+  <button class="big" id="copyBtn">📋 انسخ الأوضة</button>
+  <div class="card">افتح «مصمم الشقة» ← القائمة ☰ ← <b>📥 الصق قياس الكاميرا</b> ← الصق ودوس «ضيف».</div>
+  <textarea id="out" readonly></textarea>
+  <div class="row"><button class="b" id="againBtn">➕ قيس أوضة تانية</button><button class="b" id="dlBtn">⬇️ نزّل ملف</button></div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+const $=s=>document.querySelector(s);
+let renderer,scene,camera,reticle,session=null,hitSource=null,refSpace=null,hit=null,floorYs=[],mode='corner';
+const D={pts:[],ops:[],heights:[]};let pend=null;
+const group=new THREE.Group();
+function floorY(){if(!floorYs.length)return 0;const a=[...floorYs].sort((x,y)=>x-y);return a[Math.floor(a.length/2)];}
+function setMode(m){mode=m;pend=null;document.querySelectorAll('[data-m]').forEach(b=>b.classList.toggle('on',b.dataset.m===m));ui();}
+document.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>setMode(b.dataset.m));
+function msg(t){$('#msg').textContent=t;}
+async function init(){
+  if(!navigator.xr){msg('المتصفح ده مش بيدعم WebXR — افتح الصفحة من Chrome على الموبايل.');$('#startBtn').disabled=true;return;}
+  let ok=false;try{ok=await navigator.xr.isSessionSupported('immersive-ar');}catch(e){}
+  if(!ok){msg('ARCore مش متاح هنا — اتأكد إنك فاتح من Chrome وإن «Google Play Services for AR» متسطب ومحدّث.');$('#startBtn').disabled=true;}
+}
+init();
+function mk(){renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(devicePixelRatio);renderer.setSize(innerWidth,innerHeight);renderer.xr.enabled=true;document.body.appendChild(renderer.domElement);
+  scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.01,50);scene.add(new THREE.HemisphereLight(0xffffff,0x444444,2));scene.add(group);
+  reticle=new THREE.Mesh(new THREE.RingGeometry(0.06,0.08,40).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0x22c55e,depthTest:false}));reticle.matrixAutoUpdate=false;reticle.visible=false;reticle.renderOrder=9;scene.add(reticle);
+  const cross=new THREE.Mesh(new THREE.CircleGeometry(0.008,16).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false}));reticle.add(cross);}
+$('#startBtn').onclick=async()=>{
+  if(!renderer)mk();
+  try{session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['hit-test'],optionalFeatures:['dom-overlay','local-floor'],domOverlay:{root:$('#ov')}});}
+  catch(e){msg('مقدرتش أبدأ AR: '+e.message);return;}
+  try{renderer.xr.setReferenceSpaceType('local-floor');await renderer.xr.setSession(session);}catch(e){renderer.xr.setReferenceSpaceType('local');await renderer.xr.setSession(session);}
+  refSpace=renderer.xr.getReferenceSpace();const viewer=await session.requestReferenceSpace('viewer');hitSource=await session.requestHitTestSource({space:viewer});
+  $('#home').style.display='none';$('#done').classList.remove('on');$('#ov').classList.add('on');
+  session.addEventListener('end',()=>{hitSource=null;session=null;$('#ov').classList.remove('on');renderer.setAnimationLoop(null);showDone();});
+  renderer.setAnimationLoop(frame);ui();
+};
+function frame(t,f){if(!f||!hitSource)return;const r=f.getHitTestResults(hitSource);
+  if(r.length){const p=r[0].getPose(refSpace);const m=p.transform.matrix;reticle.matrix.fromArray(m);reticle.visible=true;const ny=m[5];
+    hit={x:m[12],y:m[13],z:m[14],kind:ny>0.75?'floor':ny<-0.75?'ceil':Math.abs(ny)<0.35?'wall':'other'};if(hit.kind==='floor'){floorYs.push(hit.y);if(floorYs.length>60)floorYs.shift();}
+    reticle.material.color.set(hit.kind==='floor'?0x22c55e:hit.kind==='wall'?0x38bdf8:hit.kind==='ceil'?0xf472b6:0xf59e0b);}
+  else{reticle.visible=false;hit=null;}
+  live();renderer.render(scene,camera);}
+const fmt=v=>(v).toFixed(2)+' م';
+function live(){const L=$('#live'),dot=$('#dot');dot.style.background=!hit?'#ef4444':hit.kind==='floor'?'#22c55e':hit.kind==='wall'?'#38bdf8':hit.kind==='ceil'?'#f472b6':'#f59e0b';
+  if(!hit){L.textContent='حرّك الموبايل ببطء…';return;}
+  if(mode==='height'){L.textContent=(hit.kind==='ceil'||hit.kind==='wall')?'↕ '+fmt(hit.y-floorY()):'وجّه على السقف';return;}
+  if(hit.kind!=='floor'){L.textContent='وجّه الدايرة على الأرض';return;}
+  const last=mode==='corner'?D.pts[D.pts.length-1]:pend;L.textContent=last?'↔ '+fmt(Math.hypot(hit.x-last.x,hit.z-last.z)):'';}
+function ui(){const n=D.pts.length;let t='';
+  if(mode==='corner')t=`سجّل الركنة ${n+1} — الدايرة على الأرض عند أسفل الركنة`;
+  if(mode==='door'||mode==='window')t=pend?`سجّل الطرف التاني لل${mode==='door'?'باب':'شباك'}`:`سجّل الطرف الأول لل${mode==='door'?'باب':'شباك'} (على الأرض تحته)`;
+  if(mode==='height')t='وجّه الدايرة على السقف (أو أعلى الحيطة) وسجّل';
+  $('#info').textContent=t;$('#stat').textContent=`${n} ركنة · ${D.ops.length} فتحة${D.heights.length?' · ارتفاع '+fmt(avgH()):''}`;$('#finBtn').disabled=n<3;draw3();}
+function avgH(){return D.heights.reduce((a,b)=>a+b,0)/D.heights.length;}
+$('#addBtn').onclick=()=>{if(!hit){navigator.vibrate&&navigator.vibrate([20,40,20]);return;}
+  if(mode==='height'){if(hit.kind==='floor'){return;}const h=hit.y-floorY();if(h>1.8&&h<6){D.heights.push(h);}ui();navigator.vibrate&&navigator.vibrate(30);return;}
+  if(hit.kind!=='floor')return;const p={x:hit.x,z:hit.z};
+  if(mode==='corner')D.pts.push(p);else if(!pend)pend=p;else{D.ops.push({k:mode,a:pend,b:p});pend=null;}
+  navigator.vibrate&&navigator.vibrate(30);ui();};
+$('#undoBtn').onclick=()=>{if(pend)pend=null;else if(mode==='corner')D.pts.pop();else if(mode==='height')D.heights.pop();else D.ops.pop();ui();};
+$('#finBtn').onclick=()=>session&&session.end();$('#endBtn').onclick=()=>session&&session.end();
+function draw3(){group.clear();const y=floorY()+0.003;const mat=c=>new THREE.MeshBasicMaterial({color:c,depthTest:false});
+  const dot=(p,c)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(0.025,12,8),mat(c));m.position.set(p.x,y,p.z);m.renderOrder=8;group.add(m);};
+  const line=(a,b,c)=>{const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(a.x,y,a.z),new THREE.Vector3(b.x,y,b.z)]);const l=new THREE.Line(g,new THREE.LineBasicMaterial({color:c,depthTest:false}));l.renderOrder=8;group.add(l);};
+  D.pts.forEach((p,i)=>{dot(p,0xf59e0b);if(i)line(D.pts[i-1],p,0xf59e0b);});if(D.pts.length>2)line(D.pts[D.pts.length-1],D.pts[0],0xfde68a);
+  for(const o of D.ops){dot(o.a,0x38bdf8);dot(o.b,0x38bdf8);line(o.a,o.b,0x38bdf8);}if(pend)dot(pend,0x38bdf8);}
+/* ---------- النتيجة ---------- */
+function squarePoly(P){const n=P.length,E=[];for(let i=0;i<n;i++){const a=P[i],b=P[(i+1)%n];E.push({m:{x:(a.x+b.x)/2,y:(a.y+b.y)/2},ang:Math.atan2(b.y-a.y,b.x-a.x)});}
+  const a0=E[0].ang,R=Math.PI/180;for(const e of E){const rel=e.ang-a0,q=Math.round(rel/(Math.PI/2))*(Math.PI/2),d=Math.atan2(Math.sin(rel-q),Math.cos(rel-q));if(Math.abs(d)<15*R)e.ang=a0+q;}
+  const out=[];for(let i=0;i<n;i++){const A=E[(i-1+n)%n],B=E[i];const ua={x:Math.cos(A.ang),y:Math.sin(A.ang)},ub={x:Math.cos(B.ang),y:Math.sin(B.ang)};const den=ua.x*ub.y-ua.y*ub.x;if(Math.abs(den)<1e-3){out.push({...P[i]});continue;}const dx=B.m.x-A.m.x,dy=B.m.y-A.m.y,t=(dx*ub.y-dy*ub.x)/den;out.push({x:A.m.x+ua.x*t,y:A.m.y+ua.y*t});}
+  return{pts:out,rot:-a0};}
+function result(){const raw=D.pts.map(p=>({x:p.x*100,y:p.z*100}));let rot=0,P=raw;if($('#ortho').checked&&raw.length>=3){const s=squarePoly(raw);P=s.pts;rot=s.rot;}
+  const c=Math.cos(rot),s=Math.sin(rot),tf=p=>({x:p.x*c-p.y*s,y:p.x*s+p.y*c});P=P.map(tf);
+  const ops=D.ops.map(o=>({k:o.k,a:tf({x:o.a.x*100,y:o.a.z*100}),b:tf({x:o.b.x*100,y:o.b.z*100})}));
+  let x0=Math.min(...P.map(p=>p.x)),y0=Math.min(...P.map(p=>p.y));const sh=p=>({x:Math.round((p.x-x0)*10)/10,y:Math.round((p.y-y0)*10)/10});
+  return{fdScan:1,v:1,src:'arcore',pts:P.map(sh),ops:ops.map(o=>({k:o.k,a:sh(o.a),b:sh(o.b)})),wallH:D.heights.length?Math.round(avgH()*100):null};}
+function showDone(){if(D.pts.length<3){$('#home').style.display='flex';msg(D.pts.length?'لازم 3 أركان على الأقل.':'');return;}
+  $('#done').classList.add('on');render();}
+function render(){const r=result();$('#out').value=JSON.stringify(r);const cv=$('#plan'),x=cv.getContext('2d');const W=cv.width=cv.clientWidth*2,H=cv.height=cv.clientHeight*2;x.fillStyle='#f8f7f3';x.fillRect(0,0,W,H);
+  const xs=r.pts.map(p=>p.x),ys=r.pts.map(p=>p.y);const bw=Math.max(...xs),bh=Math.max(...ys);const k=Math.min((W-120)/bw,(H-120)/bh),ox=(W-bw*k)/2,oy=(H-bh*k)/2;const X=p=>ox+p.x*k,Y=p=>oy+p.y*k;
+  x.strokeStyle='#334155';x.lineWidth=12;x.lineJoin='miter';x.beginPath();r.pts.forEach((p,i)=>i?x.lineTo(X(p),Y(p)):x.moveTo(X(p),Y(p)));x.closePath();x.stroke();
+  x.font='bold 26px Cairo';x.fillStyle='#0f172a';x.textAlign='center';let per=0;
+  r.pts.forEach((p,i)=>{const q=r.pts[(i+1)%r.pts.length];const L=Math.hypot(q.x-p.x,q.y-p.y);per+=L;x.fillText((L/100).toFixed(2)+' م',(X(p)+X(q))/2,(Y(p)+Y(q))/2-12);});
+  x.strokeStyle='#0284c7';x.lineWidth=10;for(const o of r.ops){x.beginPath();x.moveTo(X(o.a),Y(o.a));x.lineTo(X(o.b),Y(o.b));x.stroke();}
+  $('#sum').innerHTML=`🧱 ${r.pts.length} حيطان · المحيط <b>${(per/100).toFixed(2)} م</b><br>🚪 ${r.ops.filter(o=>o.k==='door').length} باب · 🪟 ${r.ops.filter(o=>o.k==='window').length} شباك<br>📏 الارتفاع: <b>${r.wallH?(r.wallH/100).toFixed(2)+' م':'متقاسش'}</b>`;}
+$('#ortho').onchange=render;
+$('#copyBtn').onclick=async()=>{const t=$('#out').value;try{await navigator.clipboard.writeText(t);$('#copyBtn').textContent='✅ اتنسخت — روح الصقها في البرنامج';}catch(e){$('#out').select();document.execCommand('copy');$('#copyBtn').textContent='✅ اتنسخت';}};
+$('#dlBtn').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([$('#out').value],{type:'application/json'}));a.download='room-scan.json';a.click();};
+$('#againBtn').onclick=()=>{D.pts=[];D.ops=[];D.heights=[];pend=null;$('#done').classList.remove('on');$('#home').style.display='flex';$('#copyBtn').textContent='📋 انسخ الأوضة';};
+</script>
+</body>
+</html>
