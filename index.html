@@ -641,7 +641,7 @@ addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.target.tagName==
 
 /* tools */
 const HINTS={select:'اسحب على مكان فاضي عشان تحدد مجموعة — صباعين أو ✋ عشان تحرك الشاشة',wall:'اسحب صباعك عشان ترسم حيطة — بتلزق في الأطراف والزوايا القايمة',room:'اسحب مستطيل عشان تعمل أوضة كاملة',run:'',multi:'اسحب مربع حوالين الحاجات اللي عايزها، أو دوس على كل حاجة لوحدها',erase:'دوس على أي حاجة عشان تمسحها',place:'دوس على المكان اللي عايز تحطه فيه'};
-function setTool(t){if(t!=='run'&&drawRun&&tool==='run'){finishRun();}if(t==='run'&&tool!=='run')toast('اسحب من العلبة للمكان = خط · اسحب تاني من أي علبة = خط جديد لوحده');tool=t;setTimeout(runbar,0);document.querySelectorAll('#tools .tb[data-tool]').forEach(b=>b.classList.toggle('on',b.dataset.tool===t&&!placing));$('#hint').textContent=placing?`${CAT[placing].ic} ${HINTS.place}`:HINTS[t]||'';clearTimeout(hintT);if(t==='select'&&!placing)hintT=setTimeout(()=>{if(tool==='select'&&!placing)$('#hint').textContent='';},5000);}
+function setTool(t){if(t!=='run'&&drawRun&&tool==='run'){finishRun();}if(t==='run'&&tool!=='run')toast('اسحب من نقطة لنقطة = خط · اسحب من آخر الخط عشان تكمّله');tool=t;setTimeout(runbar,0);document.querySelectorAll('#tools .tb[data-tool]').forEach(b=>b.classList.toggle('on',b.dataset.tool===t&&!placing));$('#hint').textContent=placing?`${CAT[placing].ic} ${HINTS.place}`:HINTS[t]||'';clearTimeout(hintT);if(t==='select'&&!placing)hintT=setTimeout(()=>{if(tool==='select'&&!placing)$('#hint').textContent='';},5000);}
 let hintT;
 document.querySelectorAll('#tools .tb').forEach(b=>b.onclick=()=>{if(b.id==='undoBtn'){undo();return;}if(b.id==='layBtn'){openLayers();return;}if(b.id==='scanBtn'){openScanMenu();return;}if(b.dataset.cat){openCat(b.dataset.cat);return;}placing=null;setTool(b.dataset.tool);if(b.dataset.tool!=='select'&&!(b.dataset.tool==='multi'&&sel&&sel.multi)){sel=null;panel();req();}});
 
@@ -1020,17 +1020,14 @@ function runDown(p,s){if(!drawRun){const q0=snapRun(p,null);const r=q0.run;
     if(r&&q0.rv&&(q0.vi===0||q0.vi===r.pts.length-1)&&r.pts.length>=2){const pts=r.pts.map(q=>({x:q.x,y:q.y}));if(q0.vi===0)pts.reverse();drawRun={kind:r.kind,pts,edit:r,fresh:true};toast('✏️ بتكمّل نفس الخط');}
     else if(r){drawRun={kind:r.kind,pts:[],parent:r};toast('🌿 فرع جديد من الخط');}
     else drawRun={kind:curKind(),pts:[]};runbar();}const last=drawRun.pts[drawRun.pts.length-1];const q=snapRun(p,last);const sd=snapRun(p,null);drawRun.cur=q;drawRun.ghost=null;op={type:'rundraw',s0:s,down:{x:sd.x,y:sd.y},start:sd,dragged:false};req();}
-function runUp(){const q=drawRun.cur,now=performance.now();const last=drawRun.pts[drawRun.pts.length-1];drawRun.ghost=null;
-  if(op.dragged&&q){const d0=op.down;const fromLast=last&&Math.hypot(d0.x-last.x,d0.y-last.y)<16/V.z;
-    if(!drawRun.pts.length){drawRun.pts.push({x:d0.x,y:d0.y},{x:q.x,y:q.y});}
-    else if(fromLast){drawRun.fresh=false;drawRun.pts.push({x:q.x,y:q.y});}
-    else{const st=op.start||{};const kind=(st.run&&st.run.kind)||drawRun.kind;finishRun(true);drawRun={kind,pts:[{x:d0.x,y:d0.y},{x:q.x,y:q.y}],parent:st.run||null};toast('🌿 خط جديد لوحده');}
-    lastRunUp=now;drawRun.cur=null;req();runbar();return;}
-  if(!drawRun.pts.length){drawRun.pts.push({x:op.down.x,y:op.down.y});if(Math.hypot(q.x-op.down.x,q.y-op.down.y)>8)drawRun.pts.push({x:q.x,y:q.y});}
-  else if(drawRun.fresh){drawRun.fresh=false;if(Math.hypot(q.x-last.x,q.y-last.y)>=12/V.z)drawRun.pts.push({x:q.x,y:q.y});}
-  else if(Math.hypot(q.x-last.x,q.y-last.y)<12/V.z){lastRunUp=null;finishRun();return;}
-  else drawRun.pts.push({x:q.x,y:q.y});
-  lastRunUp=now;drawRun.cur=null;req();runbar();}
+function runUp(){const q=drawRun.cur;drawRun.ghost=null;drawRun.cur=null;
+  if(!op.dragged||!q){if(!drawRun.pts.length||drawRun.fresh||!drawRun.edit){drawRun=null;toast('اسحب بصباعك من نقطة لنقطة عشان ترسم خط');}req();runbar();return;}
+  const d0=op.down,last=drawRun.pts[drawRun.pts.length-1];const fromLast=last&&Math.hypot(d0.x-last.x,d0.y-last.y)<16/V.z;
+  if(Math.hypot(q.x-d0.x,q.y-d0.y)<3){drawRun=null;req();runbar();return;}
+  if(drawRun.pts.length&&fromLast){drawRun.fresh=false;drawRun.pts.push({x:q.x,y:q.y});}
+  else if(!drawRun.pts.length){drawRun.pts.push({x:d0.x,y:d0.y},{x:q.x,y:q.y});}
+  else{const st=op.start||{};const kind=(st.run&&st.run.kind)||drawRun.kind;finishRun(true);drawRun={kind,pts:[{x:d0.x,y:d0.y},{x:q.x,y:q.y}],parent:st.run||null};}
+  finishRun();}
 function junction(nr){for(const e of[nr.pts[0],nr.pts[nr.pts.length-1]])for(const r of S.runs){if(r===nr||r.layer!==nr.layer)continue;for(let i=1;i<r.pts.length;i++){const pr=proj(e,r.pts[i-1],r.pts[i]);if(pr.d<0.6&&pr.t>0.001&&pr.t<0.999){r.pts.splice(i,0,{x:e.x,y:e.y});break;}}}}
 function finishRun(silent){if(!drawRun)return;const d=drawRun;drawRun=null;if(d.pts.length>=2){snap();let nr;if(d.edit){d.edit.pts=d.pts;d.edit.kind=d.kind;nr=d.edit;}else{const K=RK[d.kind],P=d.parent&&S.runs.includes(d.parent)?d.parent:null;nr={id:uid(),layer:K.L,kind:d.kind,pts:d.pts,z:P&&P.kind===d.kind?P.z:K.z,dia:P&&P.kind===d.kind?P.dia:K.dia};S.runs.push(nr);}junction(nr);attachRun(nr);sel=null;changed();if(!silent)toast(d.edit?'✔ الخط اتمد':'✔ اتسجل خط جديد لوحده');}else if(!silent)toast('الخط محتاج نقطتين على الأقل');req();runbar();}
 function runbar(){const b=$('#runbar');if(tool!=='run'||S.active==='arch'){b.classList.remove('on');return;}b.classList.add('on');const k=drawRun?drawRun.kind:curKind();
