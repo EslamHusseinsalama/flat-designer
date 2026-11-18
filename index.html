@@ -362,7 +362,7 @@ function snap(){undoStack.push(JSON.stringify(S));if(undoStack.length>80)undoSta
 function undo(){if(drawRun&&drawRun.pts.length){drawRun.pts.pop();if(!drawRun.pts.length)drawRun=null;req();runbar();return;}if(!undoStack.length){toast('مفيش حاجة ترجعها');return;}S=JSON.parse(undoStack.pop());sel=null;changed();}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
 let dirty3d=true;
-function changed(){weld();save();dirty3d=true;req();panel();}
+function changed(){weld();syncAtt();save();dirty3d=true;req();panel();}
 
 /* ============ هندسة ============ */
 const wlen=w=>Math.hypot(w.b.x-w.a.x,w.b.y-w.a.y);
@@ -391,7 +391,7 @@ function fit(){if(!W)return;const b=bounds(),bw=b.x1-b.x0+160,bh=b.y1-b.y0+160;V
 function zoomAt(f,sx,sy){const p=toW(sx,sy);V.z=clamp(V.z*f,0.05,6);V.ox=sx-p.x*V.z;V.oy=sy-p.y*V.z;req();}
 
 function draw(){
-  needDraw=false;if(!W)return;
+  needDraw=false;if(!W)return;syncAtt();
   ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#f8f7f3';ctx.fillRect(0,0,W,H);
   // grid
   const a=toW(0,0),b=toW(W,H);
@@ -551,7 +551,7 @@ cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);const s=
   const w=hitWall(p);
   if(w){sel={wall:w};panel();req();snap();op=wallMoveOp(w,p,s);return;}
   const rn=hitRun(p);
-  if(rn){sel={run:rn};panel();req();snap();op={type:'rundrag',r:rn,p0:p,o:rn.pts.map(q=>({...q})),snapTaken:true,moved:false,s0:s};return;}
+  if(rn){sel={run:rn};panel();req();snap();op={type:'rundrag',r:rn,p0:p,o:rn.pts.map(q=>({x:q.x,y:q.y})),snapTaken:true,moved:false,s0:s};return;}
   preview={type:'marq',a:p,b:p};op={type:'marq',s0:s,fromSelect:true};req();
 });
 cv.addEventListener('pointermove',e=>{if(!ptrs.has(e.pointerId))return;const s=ev(e);ptrs.set(e.pointerId,s);if(!op)return;
@@ -566,13 +566,13 @@ cv.addEventListener('pointermove',e=>{if(!ptrs.has(e.pointerId))return;const s=e
   else if(op.type==='marq'){preview.b=p;req();}
   else if(op.type==='rundraw'){if(Math.hypot(s.x-op.s0.x,s.y-op.s0.y)>10)op.dragged=true;const last=drawRun.pts[drawRun.pts.length-1];const fromLast=last&&Math.hypot(op.down.x-last.x,op.down.y-last.y)<16/V.z;const from=op.dragged&&!fromLast?op.down:(last||op.down);drawRun.ghost=op.dragged&&!fromLast&&last?op.down:null;drawRun.cur=snapRun(p,op.dragged?from:last);req();}
   else if(op.type==='runvert'){if(!far&&!op.moved)return;op.moved=true;const r=op.r;const prev=r.pts[op.i-1]||r.pts[op.i+1];const q=snapRun(p,prev);r.pts[op.i]={x:q.x,y:q.y};req();}
-  else if(op.type==='rundrag'){if(!far&&!op.moved)return;op.moved=true;const dx=Math.round((p.x-op.p0.x)/5)*5,dy=Math.round((p.y-op.p0.y)/5)*5;op.r.pts.forEach((q,i)=>{q.x=op.o[i].x+dx;q.y=op.o[i].y+dy;});req();}
+  else if(op.type==='rundrag'){if(!far&&!op.moved)return;if(!op.moved)op.r.pts.forEach(q=>delete q.att);op.moved=true;const dx=Math.round((p.x-op.p0.x)/5)*5,dy=Math.round((p.y-op.p0.y)/5)*5;op.r.pts.forEach((q,i)=>{q.x=op.o[i].x+dx;q.y=op.o[i].y+dy;});req();}
   else if(op.type==='gdrag'){if(!far&&!op.moved)return;op.moved=true;applyGroup(op,Math.round((p.x-op.p0.x)/5)*5,Math.round((p.y-op.p0.y)/5)*5);req();}
 });
 function endPtr(e){if(!ptrs.has(e.pointerId))return;ptrs.delete(e.pointerId);if(!op)return;
   if(op.type==='pinch'){if(ptrs.size===0)op=null;else{const s=[...ptrs.values()][0];op={type:'pan',s0:s,o:{x:V.ox,y:V.oy}};}return;}
   if(op.type==='rundraw'){runUp();op=null;return;}
-  if(op.type==='runvert'||op.type==='rundrag'){if(!op.moved)undoStack.pop();else changed();op=null;return;}
+  if(op.type==='runvert'||op.type==='rundrag'){if(!op.moved)undoStack.pop();else{attachRun(op.r);changed();}op=null;return;}
   if(op.type==='gdrag'){if(!op.moved){undoStack.pop();if(op.toggleOff){op.toggleOff[0].delete(op.toggleOff[1]);if(!sel.multi.items.size&&!sel.multi.walls.size&&!sel.multi.runs.size)sel=null;}}else changed();panel();req();}
   else if(op.type==='marq'){const{a,b}=preview;preview=null;const x0=Math.min(a.x,b.x),x1=Math.max(a.x,b.x),y0=Math.min(a.y,b.y),y1=Math.max(a.y,b.y);const inR=q=>q.x>=x0&&q.x<=x1&&q.y>=y0&&q.y<=y1;
     if((x1-x0)*V.z<6&&(y1-y0)*V.z<6){sel=null;}else{if(!sel||!sel.multi||op.fromSelect)sel={multi:{items:new Set(),walls:new Set(),runs:new Set()}};for(const it of S.items)if(itEdit(it)&&inR(it))sel.multi.items.add(it);if(archEdit())for(const w of S.walls)if(inR({x:(w.a.x+w.b.x)/2,y:(w.a.y+w.b.y)/2}))sel.multi.walls.add(w);for(const r of S.runs)if(runEdit(r)&&r.pts.every(inR))sel.multi.runs.add(r);const nn=sel.multi.items.size+sel.multi.walls.size+sel.multi.runs.size;if(!nn)sel=null;else if(nn===1){sel=sel.multi.items.size?{item:[...sel.multi.items][0]}:sel.multi.walls.size?{wall:[...sel.multi.walls][0]}:{run:[...sel.multi.runs][0]};}else toast(`اتحدد ${nn} حاجة`);}panel();req();}
@@ -702,6 +702,7 @@ function panelInner(){const P=$('#panel');if(!sel||tab!=='2d'){P.classList.remov
   if(c.g!=='open'&&c.mount!=='wall')h+='</div><div class="row"><button class="btn" data-mv="0,-5">⬆️</button><button class="btn" data-mv="0,5">⬇️</button><button class="btn" data-mv="5,0">➡️</button><button class="btn" data-mv="-5,0">⬅️</button><span style="align-self:center;color:#64748b;font-size:12px">5 سم</span></div><div class="row">';
   h+='<button class="btn" id="pDup">⧉ نسخة</button><button class="btn dan" id="pDel">🗑️ مسح</button></div>';
   if(c.tp&&c.L==='elec'&&c.mount!=='ceil'){const PR=it.k==='t_db'?[[30,40],[40,55],[50,70],[60,90]]:[[7,7],[10,10],[15,15],[20,20],[25,25],[30,30]];h+=`<div class="sec">📦 مقاسات جاهزة للعلبة (عرض × ارتفاع)</div><div class="row">`+PR.map(([a,b])=>`<button class="btn" data-bx="${a},${b}" style="${Math.round(it.w)===a&&Math.round(it.h)===b?'background:#fef3c7;border-color:#f59e0b':''}">${a}×${b}</button>`).join('')+`</div>`;}
+  if(c.tp){const n=attCount(it);h+=`<div class="sec" style="color:${n?'#15803d':'#64748b'}">🔗 ${n?'متوصل بيها '+n+' خط — بيتحركوا معاها':'مفيش خطوط متوصلة بيها'}</div>`;}
   if(c.ch)h+=`<div class="sec">📟 نود ESP — ${c.ch===1?'خط واحد (ريلاي واحد)':c.ch===2?'خطين (2 ريلاي)':'3 خطوط (3 ريلاي)'} · تقدر تطلّع منه خطوط التمديد</div>`;
   if(c.tp)h+=`<div class="sec">${LAYERS[c.L].ic} نقطة تأسيس — الارتفاع من الأرض هو مكان تركيبها</div><label class="fld">ملاحظات / مواصفات<input id="pNote" style="direction:rtl;text-align:right" placeholder="مثلاً: 16 أمبير، تحت الرخامة…" value="${esc(it.note||'')}"></label>`;
   P.innerHTML=h;
@@ -1005,6 +1006,10 @@ function boxSnap(p,it,tol){const c=CAT[it.k];const fw=Math.max(it.w,c.sq?22/V.z:
   const ox=Math.max(0,Math.abs(lx)-fw),oy=Math.max(0,Math.abs(ly)-fd);const d=Math.hypot(ox,oy);if(d>tol)return null;
   const hw=Math.max(it.w/2,0),hd=Math.max((c.mount==='wall'?Math.max(it.d,it.h*0.35):it.d)/2,0);const cx=clamp(lx,-hw,hw),cy=clamp(ly,-hd,hd);const c2=Math.cos((it.r||0)*R),s2=Math.sin((it.r||0)*R);
   return{d,x:Math.round((it.x+cx*c2-cy*s2)*2)/2,y:Math.round((it.y+cx*s2+cy*c2)*2)/2,pt:it};}
+function attachRun(r){for(const q of r.pts){delete q.att;let best=null;for(const it of S.items){const c=CAT[it.k];if(!c.tp||c.L!==r.layer)continue;const b=boxSnap(q,it,0.6);if(b&&b.d<=0.6){best=it;break;}}
+    if(best){const cr=Math.cos(-(best.r||0)*R),sr=Math.sin(-(best.r||0)*R);const dx=q.x-best.x,dy=q.y-best.y;q.att={id:best.id,lx:Math.round((dx*cr-dy*sr)*10)/10,ly:Math.round((dx*sr+dy*cr)*10)/10};}}}
+function syncAtt(){if(!S||!S.runs)return;const Mp=new Map(S.items.map(i=>[i.id,i]));for(const r of S.runs)for(const q of r.pts){if(!q.att)continue;const it=Mp.get(q.att.id);if(!it){delete q.att;continue;}const c=Math.cos((it.r||0)*R),s2=Math.sin((it.r||0)*R);q.x=it.x+q.att.lx*c-q.att.ly*s2;q.y=it.y+q.att.lx*s2+q.att.ly*c;}}
+const attCount=it=>S.runs.filter(r=>r.pts.some(q=>q.att&&q.att.id===it.id)).length;
 function snapRun(p,from){const tol=26/V.z;let best=null,bd=1e9;for(const it of S.items){const c=CAT[it.k];if(!c.tp||c.L!==S.active||!itVis(it))continue;const b=boxSnap(p,it,tol);if(b&&b.d<bd){bd=b.d;best=b;}}if(best)return best;
   bd=20/V.z;for(const r of S.runs){if(r.layer!==S.active||!runVis(r))continue;r.pts.forEach((q,i)=>{if(drawRun&&drawRun.pts.includes(q))return;const d=Math.hypot(p.x-q.x,p.y-q.y);if(d<bd){bd=d;best={x:q.x,y:q.y,rv:1,run:r,vi:i};}});}if(best)return best;
   bd=16/V.z;for(const r of S.runs){if(r.layer!==S.active||!runVis(r))continue;if(drawRun&&drawRun.edit===r)continue;for(let i=1;i<r.pts.length;i++){const pr=proj(p,r.pts[i-1],r.pts[i]);if(pr.d<bd&&pr.t>0.02&&pr.t<0.98){bd=pr.d;best={x:Math.round(pr.x),y:Math.round(pr.y),onRun:1,run:r,seg:i};}}}if(best)return best;
@@ -1027,7 +1032,7 @@ function runUp(){const q=drawRun.cur,now=performance.now();const last=drawRun.pt
   else drawRun.pts.push({x:q.x,y:q.y});
   lastRunUp=now;drawRun.cur=null;req();runbar();}
 function junction(nr){for(const e of[nr.pts[0],nr.pts[nr.pts.length-1]])for(const r of S.runs){if(r===nr||r.layer!==nr.layer)continue;for(let i=1;i<r.pts.length;i++){const pr=proj(e,r.pts[i-1],r.pts[i]);if(pr.d<0.6&&pr.t>0.001&&pr.t<0.999){r.pts.splice(i,0,{x:e.x,y:e.y});break;}}}}
-function finishRun(silent){if(!drawRun)return;const d=drawRun;drawRun=null;if(d.pts.length>=2){snap();let nr;if(d.edit){d.edit.pts=d.pts;d.edit.kind=d.kind;nr=d.edit;}else{const K=RK[d.kind],P=d.parent&&S.runs.includes(d.parent)?d.parent:null;nr={id:uid(),layer:K.L,kind:d.kind,pts:d.pts,z:P&&P.kind===d.kind?P.z:K.z,dia:P&&P.kind===d.kind?P.dia:K.dia};S.runs.push(nr);}junction(nr);sel=null;changed();if(!silent)toast(d.edit?'✔ الخط اتمد':'✔ اتسجل خط جديد لوحده');}else if(!silent)toast('الخط محتاج نقطتين على الأقل');req();runbar();}
+function finishRun(silent){if(!drawRun)return;const d=drawRun;drawRun=null;if(d.pts.length>=2){snap();let nr;if(d.edit){d.edit.pts=d.pts;d.edit.kind=d.kind;nr=d.edit;}else{const K=RK[d.kind],P=d.parent&&S.runs.includes(d.parent)?d.parent:null;nr={id:uid(),layer:K.L,kind:d.kind,pts:d.pts,z:P&&P.kind===d.kind?P.z:K.z,dia:P&&P.kind===d.kind?P.dia:K.dia};S.runs.push(nr);}junction(nr);attachRun(nr);sel=null;changed();if(!silent)toast(d.edit?'✔ الخط اتمد':'✔ اتسجل خط جديد لوحده');}else if(!silent)toast('الخط محتاج نقطتين على الأقل');req();runbar();}
 function runbar(){const b=$('#runbar');if(tool!=='run'||S.active==='arch'){b.classList.remove('on');return;}b.classList.add('on');const k=drawRun?drawRun.kind:curKind();
   b.innerHTML=Object.keys(RK).filter(x=>RK[x].L===S.active).map(x=>`<button class="chip ${x===k?'on':''}" data-rk="${x}"><span style="background:${RK[x].col}"></span>${RK[x].n}</button>`).join('')+`<span class="sep"></span><button class="chip" id="rbUndo">↩ نقطة</button><button class="chip ok" id="rbOk">✔ خلصت</button><button class="chip" id="rbX">✕</button>`;
   b.querySelectorAll('[data-rk]').forEach(e=>e.onclick=()=>{S.runKind=S.runKind||{};S.runKind[S.active]=e.dataset.rk;if(drawRun)drawRun.kind=e.dataset.rk;save();runbar();req();});
@@ -1036,7 +1041,7 @@ function runbar(){const b=$('#runbar');if(tool!=='run'||S.active==='arch'){b.cla
 function drawRuns(){for(const r of S.runs){if(!runVis(r))continue;const K=RK[r.kind]||RK.power;ctx.globalAlpha=r.layer===S.active?1:(S.active==='arch'?0.8:0.3);const hot=isSelR(r);
     ctx.strokeStyle=hot?'#f59e0b':K.col;ctx.lineWidth=(r.kind==='drain'?5:3.2)/V.z+(hot?2/V.z:0);ctx.lineJoin='round';ctx.lineCap='round';ctx.setLineDash(K.dash.map(v=>v/V.z));ctx.beginPath();r.pts.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.stroke();ctx.setLineDash([]);
     if(hot){ctx.strokeStyle=K.col;ctx.lineWidth=2/V.z;ctx.stroke();}}
-  for(const r of S.runs){if(!runVis(r))continue;const K=RK[r.kind]||RK.power;ctx.globalAlpha=r.layer===S.active?1:(S.active==='arch'?0.8:0.3);ctx.fillStyle=K.col;for(const e of[r.pts[0],r.pts[r.pts.length-1]]){const j=S.runs.some(o=>o!==r&&o.layer===r.layer&&o.pts.some(q=>Math.abs(q.x-e.x)<1&&Math.abs(q.y-e.y)<1));ctx.beginPath();ctx.arc(e.x,e.y,(j?5:3.2)/V.z,0,7);ctx.fill();if(!j){ctx.strokeStyle='#fff';ctx.lineWidth=1.2/V.z;ctx.stroke();}}}
+  for(const r of S.runs){if(!runVis(r))continue;const K=RK[r.kind]||RK.power;ctx.globalAlpha=r.layer===S.active?1:(S.active==='arch'?0.8:0.3);ctx.fillStyle=K.col;for(const e of[r.pts[0],r.pts[r.pts.length-1]]){const j=S.runs.some(o=>o!==r&&o.layer===r.layer&&o.pts.some(q=>Math.abs(q.x-e.x)<1&&Math.abs(q.y-e.y)<1));if(e.att){ctx.beginPath();ctx.arc(e.x,e.y,4.5/V.z,0,7);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2/V.z;ctx.stroke();continue;}ctx.beginPath();ctx.arc(e.x,e.y,(j?5:3.2)/V.z,0,7);ctx.fill();if(!j){ctx.strokeStyle='#fff';ctx.lineWidth=1.2/V.z;ctx.stroke();}}}
   ctx.globalAlpha=1;
   if(drawRun){const K=RK[drawRun.kind];ctx.strokeStyle=K.col;ctx.lineWidth=3.5/V.z;ctx.setLineDash(K.dash.map(v=>v/V.z));ctx.beginPath();drawRun.pts.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));if(drawRun.cur&&!drawRun.ghost){if(drawRun.pts.length)ctx.lineTo(drawRun.cur.x,drawRun.cur.y);}ctx.stroke();if(drawRun.ghost&&drawRun.cur){ctx.beginPath();ctx.moveTo(drawRun.ghost.x,drawRun.ghost.y);ctx.lineTo(drawRun.cur.x,drawRun.cur.y);}ctx.stroke();ctx.setLineDash([]);
     ctx.fillStyle=K.col;for(const q of drawRun.pts){ctx.beginPath();ctx.arc(q.x,q.y,4/V.z,0,7);ctx.fill();}if(drawRun.cur){ctx.strokeStyle='#16a34a';ctx.lineWidth=2/V.z;ctx.beginPath();ctx.arc(drawRun.cur.x,drawRun.cur.y,(drawRun.cur.pt||drawRun.cur.rv||drawRun.cur.onRun?10:6)/V.z,0,7);ctx.stroke();}}}
@@ -1230,7 +1235,7 @@ function sample(){S=blank();const W_=(ax,ay,bx,by,t=15)=>S.walls.push({id:uid(),
 /* ============ تشغيل ============ */
 try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&Array.isArray(d.walls))S={...blank(),...d};}catch(e){}
 if(!S)S=sample();
-S.runs=S.runs||[];S.layers=Object.assign({arch:{v:true},elec:{v:true},plumb:{v:true}},S.layers||{});S.active=S.active||'arch';
+S.runs=S.runs||[];try{for(const r of S.runs)if(!r.pts.some(q=>q.att))attachRun(r);}catch(e){}S.layers=Object.assign({arch:{v:true},elec:{v:true},plumb:{v:true}},S.layers||{});S.active=S.active||'arch';
 updToolbar();
 try{weld();}catch(e){}save();
 setTool('select');
