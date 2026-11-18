@@ -152,6 +152,9 @@ textarea{width:100%;height:200px;font-family:ui-monospace,monospace;font-size:11
 #scTap{position:absolute;inset:0;z-index:1}
 #scan .sc-cross.moving::before,#scan .sc-cross.moving::after{background:#f59e0b}
 #scan .sc-cross::before,#scan .sc-cross::after{transition:background .15s}
+#pBtn{position:absolute;bottom:14px;right:12px;display:none;align-items:center;gap:8px;max-width:62vw;border:0;border-radius:999px;padding:8px 14px;background:#0f172a;color:#fff;font:800 13px Cairo;box-shadow:0 6px 18px rgba(15,23,42,.3);z-index:4}
+#pBtn.on{display:flex}
+#pBtn .pbn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -174,6 +177,7 @@ textarea{width:100%;height:200px;font-family:ui-monospace,monospace;font-size:11
       <button id="zin">＋</button><button id="zout">－</button><button id="zfit" title="ملء الشاشة">⤢</button><button id="zpan" title="تحريك الشاشة">✋</button>
     </div>
     <div id="panel"></div>
+    <button id="pBtn"></button>
   </section>
   <section class="view" id="v3d">
     <div id="walkui"><div class="cross"></div><div id="walkHint">اسحب الشاشة تبص حواليك · الدايرة تمشي</div><div id="joy"><div id="knob"></div></div><button id="walkExit">✕ خروج من التمشية</button></div>
@@ -632,7 +636,7 @@ function moveVertex(v,x,y){snap();for(const[w,k]of vertRefs(v)){w[k].x=x;w[k].y=
 function delVertex(v){const r=vertRefs(v);if(!r.length)return;snap();if(r.length===2){const[[w1,k1],[w2,k2]]=r;const o1=k1==='a'?'b':'a',o2=k2==='a'?'b':'a';const ops=S.items.filter(i=>i.wall===w1.id||i.wall===w2.id);const P1={...w1[o1]},P2={...w2[o2]};w1.a=P1;w1.b=P2;S.walls=S.walls.filter(w=>w!==w2);for(const it of ops){const rr=proj(it,w1.a,w1.b);it.wall=w1.id;it.s=rr.t*rr.L;syncOpening(it);}toast('اتدمجت الحيطتين');}else{for(const[w]of r)delWall(w);toast('اتمسحت النقطة والحيطان اللي فيها');}sel=null;changed();}
 function segSame(w,p,q){const e=(u,v)=>Math.abs(u.x-v.x)<1&&Math.abs(u.y-v.y)<1;return(e(w.a,p)&&e(w.b,q))||(e(w.a,q)&&e(w.b,p));}
 function delWall(w){S.walls=S.walls.filter(x=>x!==w);S.items=S.items.filter(i=>i.wall!==w.id);if(sel&&sel.wall===w)sel=null;}
-$('#zin').onclick=()=>zoomAt(1.25,W/2,H/2);$('#zout').onclick=()=>zoomAt(0.8,W/2,H/2);$('#zfit').onclick=fit;let panMode=false;$('#zpan').onclick=()=>{panMode=!panMode;$('#zpan').classList.toggle('on',panMode);toast(panMode?'✋ اسحب عشان تحرك الشاشة':'رجع التحديد بالسحب');};cv.addEventListener('contextmenu',e=>e.preventDefault());
+$('#zin').onclick=()=>zoomAt(1.25,W/2,H/2);$('#zout').onclick=()=>zoomAt(0.8,W/2,H/2);$('#zfit').onclick=fit;$('#pBtn').onclick=()=>{panelOpen=true;panel();};let panMode=false;$('#zpan').onclick=()=>{panMode=!panMode;$('#zpan').classList.toggle('on',panMode);toast(panMode?'✋ اسحب عشان تحرك الشاشة':'رجع التحديد بالسحب');};cv.addEventListener('contextmenu',e=>e.preventDefault());
 addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;if((e.ctrlKey||e.metaKey)&&e.key==='z'){e.preventDefault();undo();}if((e.key==='Delete'||e.key==='Backspace')&&sel){delSel();}if((e.ctrlKey||e.metaKey)&&e.key==='a'){e.preventDefault();selectAll();}if(e.key==='r'&&sel&&sel.item)rotSel(90);if(e.key==='Escape'){sel=null;placing=null;setTool('select');panel();req();}});
 
 /* tools */
@@ -647,7 +651,14 @@ function openCat(g){if(g==='tasis'){const Lr=S.active==='arch'?'elec':S.active;c
   showSheet(h);$('#sheet').querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{placing=b.dataset.k;hideSheet();sel=null;panel();setTool('select');if(CAT[placing].g==='open'&&!S.walls.length)toast('ارسم حيطان الأول');});}
 
 /* panel */
-function panel(){const P=$('#panel');if(!sel||tab!=='2d'){P.classList.remove('on');return;}P.classList.add('on');
+let panelOpen=false,panelKey=null;
+function selKey(){if(!sel)return null;if(sel.item)return 'i'+sel.item.id;if(sel.wall)return 'w'+sel.wall.id;if(sel.run)return 'r'+sel.run.id;if(sel.vertex)return 'v'+Math.round(sel.vertex.x)+','+Math.round(sel.vertex.y);if(sel.multi)return 'm';return 'x';}
+function selLabel(){if(sel.item){const c=CAT[sel.item.k];return[c.ic,sel.item.name];}if(sel.wall)return['🧱','حيطة '+(wlen(sel.wall)/100).toFixed(2)+' م'];if(sel.run)return['〰️',(RK[sel.run.kind]||RK.power).n];if(sel.vertex)return['📍','نقطة'];if(sel.multi){const m=sel.multi;return['🔲',`${m.items.size+m.walls.size+(m.runs?m.runs.size:0)} حاجة`];}return['⚙️',''];}
+function panel(){const P=$('#panel'),B=$('#pBtn');const k=selKey();if(k!==panelKey){panelKey=k;panelOpen=false;}
+  if(!sel||tab!=='2d'){P.classList.remove('on');B.classList.remove('on');return;}
+  if(!panelOpen){P.classList.remove('on');const[ic,nm]=selLabel();B.innerHTML=`<span style="font-size:18px">${ic}</span><span class="pbn">${esc(nm)}</span><span style="opacity:.8">⚙️</span>`;B.classList.add('on');return;}
+  B.classList.remove('on');panelInner();const ph=P.querySelector('.ph');if(ph&&!ph.querySelector('.pmin')){const b=document.createElement('button');b.className='x pmin';b.textContent='▾';b.title='صغّر';b.onclick=()=>{panelOpen=false;panel();};ph.insertBefore(b,ph.lastElementChild);}}
+function panelInner(){const P=$('#panel');if(!sel||tab!=='2d'){P.classList.remove('on');return;}P.classList.add('on');
   if(sel.vertex){const v=sel.vertex,n=vertRefs(v).length;if(!n){sel=null;P.classList.remove('on');return;}P.innerHTML=`<div class="ph"><span class="ic">📍</span><b style="flex:1">نقطة <small style="color:#64748b;font-weight:600">(متوصل بيها ${n} ${n===1?'حيطة':'حيطان'})</small></b><button class="x" data-close>✕</button></div>
   <div class="grid"><label class="fld">س (سم)<input id="vX" type="number" value="${Math.round(v.x)}"></label><label class="fld">ص (سم)<input id="vY" type="number" value="${Math.round(v.y)}"></label></div>
   <div class="row"><button class="btn" data-vm="0,-5">⬆️</button><button class="btn" data-vm="0,5">⬇️</button><button class="btn" data-vm="5,0">➡️</button><button class="btn" data-vm="-5,0">⬅️</button><span style="align-self:center;color:#64748b;font-size:12px">5 سم</span></div>
