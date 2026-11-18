@@ -986,11 +986,15 @@ const runEdit=r=>runVis(r)&&r.layer===S.active;
 const isSelR=r=>!!sel&&(sel.run===r||(!!sel.multi&&!!sel.multi.runs&&sel.multi.runs.has(r)));
 const runLen=r=>{let L=0;for(let i=1;i<r.pts.length;i++)L+=Math.hypot(r.pts[i].x-r.pts[i-1].x,r.pts[i].y-r.pts[i-1].y);return L;};
 function tasisH(pt){return CAT[pt.k].mount==='ceil'?S.wallH:(pt.e||0)+pt.h/2;}
-function nearestTasis(q,L,maxD){let best=null,bd=maxD;for(const it of S.items){const c=CAT[it.k];if(!c.tp||c.L!==L)continue;const d=Math.hypot(it.x-q.x,it.y-q.y);if(d<bd){bd=d;best=it;}}return best;}
+function nearestTasis(q,L,maxD){let best=null,bd=maxD;for(const it of S.items){const c=CAT[it.k];if(!c.tp||c.L!==L)continue;const d=Math.max(0,Math.hypot(it.x-q.x,it.y-q.y)-Math.max(it.w,it.d||0)/2);if(d<bd){bd=d;best=it;}}return best;}
 function runDrops(r){let s=0;for(const e of[r.pts[0],r.pts[r.pts.length-1]]){const pt=nearestTasis(e,r.layer,25);if(pt)s+=Math.abs(r.z-tasisH(pt));}return s;}
 let drawRun=null,lastRunUp=null;
 function curKind(){S.runKind=S.runKind||{};const k=S.runKind[S.active];if(k&&RK[k]&&RK[k].L===S.active)return k;return S.active==='plumb'?'cold':'power';}
-function snapRun(p,from){const tol=26/V.z;let best=null,bd=tol;for(const it of S.items){const c=CAT[it.k];if(!c.tp||c.L!==S.active||!itVis(it))continue;const d=Math.hypot(p.x-it.x,p.y-it.y);if(d<bd){bd=d;best={x:it.x,y:it.y,pt:it};}}if(best)return best;
+function boxSnap(p,it,tol){const c=CAT[it.k];const fw=Math.max(it.w,c.sq?22/V.z:20/V.z)/2,fd=Math.max(c.mount==='wall'?Math.max(it.d,it.h*0.35):it.d,c.sq?22/V.z:20/V.z)/2;const cr=Math.cos(-(it.r||0)*R),sr=Math.sin(-(it.r||0)*R);const dx=p.x-it.x,dy=p.y-it.y;const lx=dx*cr-dy*sr,ly=dx*sr+dy*cr;
+  const ox=Math.max(0,Math.abs(lx)-fw),oy=Math.max(0,Math.abs(ly)-fd);const d=Math.hypot(ox,oy);if(d>tol)return null;
+  const hw=Math.max(it.w/2,0),hd=Math.max((c.mount==='wall'?Math.max(it.d,it.h*0.35):it.d)/2,0);const cx=clamp(lx,-hw,hw),cy=clamp(ly,-hd,hd);const c2=Math.cos((it.r||0)*R),s2=Math.sin((it.r||0)*R);
+  return{d,x:Math.round((it.x+cx*c2-cy*s2)*2)/2,y:Math.round((it.y+cx*s2+cy*c2)*2)/2,pt:it};}
+function snapRun(p,from){const tol=26/V.z;let best=null,bd=1e9;for(const it of S.items){const c=CAT[it.k];if(!c.tp||c.L!==S.active||!itVis(it))continue;const b=boxSnap(p,it,tol);if(b&&b.d<bd){bd=b.d;best=b;}}if(best)return best;
   bd=20/V.z;for(const r of S.runs){if(r.layer!==S.active||!runVis(r))continue;r.pts.forEach((q,i)=>{if(drawRun&&drawRun.pts.includes(q))return;const d=Math.hypot(p.x-q.x,p.y-q.y);if(d<bd){bd=d;best={x:q.x,y:q.y,rv:1,run:r,vi:i};}});}if(best)return best;
   bd=16/V.z;for(const r of S.runs){if(r.layer!==S.active||!runVis(r))continue;if(drawRun&&drawRun.edit===r)continue;for(let i=1;i<r.pts.length;i++){const pr=proj(p,r.pts[i-1],r.pts[i]);if(pr.d<bd&&pr.t>0.02&&pr.t<0.98){bd=pr.d;best={x:Math.round(pr.x),y:Math.round(pr.y),onRun:1,run:r,seg:i};}}}if(best)return best;
   let x=Math.round(p.x/5)*5,y=Math.round(p.y/5)*5;if(from){const dx=x-from.x,dy=y-from.y;if(Math.abs(dy)<Math.abs(dx)*0.2)y=from.y;else if(Math.abs(dx)<Math.abs(dy)*0.2)x=from.x;}return{x,y};}
